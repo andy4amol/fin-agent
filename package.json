@@ -1,0 +1,34 @@
+{
+  "name": "fin-agent",
+  "version": "1.1.0",
+  "description": "A five-layer financial AI architecture system with L2→L4 anti-hallucination mechanism",
+  "main": "main.py",
+  "scripts": {
+    "start": "python3 main.py",
+    "test": "python3 tests/test_l2_l4_consistency.py",
+    "install": "pip install -r requirements.txt"
+  },
+  "keywords": [
+    "financial-ai",
+    "agent-architecture",
+    "anti-hallucination",
+    "quantitative-analysis"
+  ],
+  "author": "Fin-Agent Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/fin-agent.git"
+  },
+  "engines": {
+    "python": ">=3.8"
+  },
+  "dependencies": {
+    "aiohttp": ">=3.9.0",
+    "yfinance": ">=0.2.28"
+  },
+  "devDependencies": {
+    "pytest": ">=7.4.0",
+    "pytest-asyncio": ">=0.21.0"
+  }
+}
