@@ -1,206 +1,170 @@
-# Fin-Agent 架构文档
+# Fin-Agent TypeScript Edition
 
-## 系统概述
+一个五层金融AI架构系统，**TypeScript 实现**。
 
-Fin-Agent 是一个五层金融 AI 架构系统，专门用于金融分析和投资建议。核心设计理念是：**L4 的 AI 回复必须严格基于 L2 的计算数值，严禁幻觉**。
+**核心设计理念**：**L4 的 AI 回复必须严格基于 L2 的计算数值，严禁幻觉**。
 
 ---
 
-## 架构层次
+## 项目结构
 
-### L1: Orchestration (编排层)
-
-**职责**：
-- 统筹协调各层组件
-- Prompt 编排和组装
-- 输入/输出 Guardrails（安全防护）
-- L2 数据一致性验证
-
-**核心组件**：
-- `dispatcher.py`: 主调度器，协调整个请求流程
-- `prompt_factory.py`: Prompt 模板工厂，注入 L2 计算结果
-- `guardrails.py`: 安全防护和 L2 一致性验证
-
-**关键特性**：
-```python
-# L2→L4 防幻觉验证机制
-is_consistent, issues = Guardrails.verify_l2_consistency(
-    raw_response,
-    expected_pnl=pnl_data['total_pnl'],
-    expected_return=pnl_data['total_return_rate'],
-    pnl_details=pnl_data['details']
-)
+```
+src/
+├── types/              # 核心类型定义
+├── l1_orchestration/   # L1 调度层
+│   ├── dispatcher.ts
+│   ├── prompt_factory.ts
+│   └── guardrails.ts
+├── l2_engine/         # L2 计算引擎层
+│   ├── pnl_analyzer.ts
+│   ├── risk_model.ts
+│   └── behavior_analyzer.ts
+├── l3_rag/            # L3 RAG检索层
+│   ├── search_engine.ts
+│   ├── vector_db.ts
+│   └── source_ranker.ts
+├── l4_inference/      # L4 AI推理层
+│   ├── llm_service.ts
+│   └── llm_router.ts
+├── l5_data/           # L5 数据层
+│   ├── user_db.ts
+│   ├── market_mcp.ts
+│   └── news_data.ts
+├── main.ts            # 主入口
+└── index.ts           # 库导出
 ```
 
 ---
 
-### L2: Quantitative Engine (量化计算引擎)
+## 安装
 
-**职责**：
-- 盈亏计算
-- 风险评估
-- 行为分析
-- 提供可验证的数值结果
+### 前提条件
 
-**核心组件**：
-- `pnl_analyzer.py`: 盈亏归因分析
-- `risk_model.py`: 投资组合风险模型
-- `behavior_analyzer.py`: 交易行为分析
+- Node.js >= 18.0.0
+- npm 或 yarn
 
-**输出数据结构**：
-```python
-{
-    "total_pnl": 15000.00,           # 总盈亏（必须被 L4 引用）
-    "total_return_rate": "15.00%",   # 总收益率（必须被 L4 引用）
-    "details": [
-        {
-            "ticker": "0700.HK",
-            "current_price": 345.00,
-            "cost_price": 300.00,
-            "pnl": 4500.00,
-            "return_rate": "15.00%"
-        }
-    ],
-    "summary": "盈利"
-}
+### 安装依赖
+
+```bash
+npm install
 ```
 
 ---
 
-### L3: RAG (检索增强生成)
+## 使用方法
 
-**职责**：
-- 市场资讯检索
-- 新闻/研报获取
-- 向量化检索（可选）
-- 源排序和过滤
+### 开发模式
+```bash
+npm run dev
+```
 
-**核心组件**：
-- `search_engine.py`: 搜索引擎
-- `vector_db.py`: 向量数据库（可扩展）
-- `source_ranker.py`: 检索结果排序
+### 构建
+```bash
+npm run build
+```
+
+### 运行
+```bash
+npm start
+```
+
+### 测试
+```bash
+npm test
+```
+
+### 类型检查
+```bash
+npm run typecheck
+```
+
+### 代码检查
+```bash
+npm run lint
+```
 
 ---
 
-### L4: Inference (推理层)
+## API Keys
 
-**职责**：
-- LLM 模型调用
-- 支持多模型路由
-- 流式输出
+在使用实际 LLM 服务前，请设置环境变量：
 
-**核心组件**：
-- `llm_router.py`: 模型路由器
-- `llm_service.py`: LLM 服务封装
+```bash
+export SILICONFLOW_API_KEY="your-api-key"
+```
 
-**防幻觉机制**：
+或者在项目根目录创建 `.env` 文件：
+
+```
+SILICONFLOW_API_KEY=your-api-key
+```
+
+---
+
+## 架构特性
+
+### 1. 五层架构
+
+- **L1: Orchestration (调度层)** - Prompt编排、安全防护
+- **L2: Engine (计算层)** - 盈亏计算、风险模型
+- **L3: RAG (检索层)** - 向量检索、新闻搜索
+- **L4: Inference (推理层)** - LLM调用、流式输出
+- **L5: Data (数据层)** - 用户数据、市场行情
+
+### 2. 防幻觉机制
+
 1. **Prompt 层面约束**：明确要求使用 L2 提供的数值
 2. **后验验证**：L1 层检查 L4 输出是否包含正确的 L2 数值
 3. **System Prompt**：强制禁止编造数值
 
----
+### 3. TypeScript 优势
 
-### L5: Data Layer (数据层)
-
-**职责**：
-- 实时行情数据获取
-- 用户数据管理
-- 新闻数据源
-
-**核心组件**：
-- `market_mcp.py`: 市场数据接口（基于 yfinance）
-- `user_db.py`: 用户持仓数据
-- `news_data.py`: 新闻数据源
-
----
-
-## 数据流图
-
-```
-用户请求
-   ↓
-[L1 Dispatcher]
-   ├─→ [L5] 获取持仓数据
-   ├─→ [L5] 获取实时行情
-   ├─→ [L2] 计算盈亏 ← 必须被 L4 引用
-   ├─→ [L2] 计算风险
-   └─→ [L3] 检索资讯
-   ↓
-[L1 PromptFactory] 注入 L2 数值到 Prompt
-   ↓
-[L4 LLM Service] 生成回复
-   ↓
-[L1 Guardrails] 验证 L4 回复是否包含正确的 L2 数值
-   ↓
-最终回复
-```
-
----
-
-## 核心设计原则
-
-### 1. 数值真实性保证
-
-**问题**：LLM 容易产生数值幻觉
-
-**解决方案**：
-- L2 计算所有数值
-- L1 在 Prompt 中明确注入 L2 结果
-- L1 在输出后验证 L4 是否使用了正确的数值
-
-### 2. 可审计性
-
-所有计算结果都有明确的来源：
-- 盈亏 → `pnl_analyzer.py`
-- 风险 → `risk_model.py`
-- 行为 → `behavior_analyzer.py`
-
-### 3. 可扩展性
-
-- 模型路由：支持多个 LLM 提供商
-- 数据源：可添加更多市场数据源
-- RAG：可集成真实的向量数据库
+- 完整的类型安全
+- 更好的IDE支持
+- 易于集成到现有Node.js项目
+- 现代化的JavaScript特性
 
 ---
 
 ## 安全机制
 
 ### 输入 Guardrails
-```python
-forbidden_keywords = ["内幕", "诈骗", "非法"]
+```typescript
+const forbiddenKeywords = ['内幕', '诈骗', '非法'];
 ```
 
 ### 输出 Guardrails
-```python
-required_disclaimers = ["风险提示", "仅供参考"]
+```typescript
+const requiredDisclaimers = ['风险提示', '仅供参考'];
 ```
 
 ### L2 一致性验证
-```python
-verify_l2_consistency(response, expected_pnl, expected_return, pnl_details)
+```typescript
+verifyL2Consistency(response, expectedPnl, expectedReturn, pnlDetails);
 ```
 
 ---
 
-## 配置说明
+## 从 Python 迁移到 TypeScript
 
-### 环境变量
-- `SILICONFLOW_API_KEY`: SiliconFlow API 密钥（用于 LLM）
+### 主要变更
 
-### 依赖安装
-```bash
-pip install -r requirements.txt
-```
+1. **类型系统**：Python 的灵活类型 → TypeScript 的严格类型
+2. **异步处理**：Python 的 `asyncio` → TypeScript 的 `async/await`
+3. **HTTP 请求**：Python 的 `aiohttp` → TypeScript 的 `axios`
+4. **金融市场数据**：Python 的 `yfinance` → TypeScript 的 `yahoo-finance2`
+
+### 优势
+
+- **类型安全**：编译时捕获类型错误
+- **IDE支持**：更好的自动补全和重构
+- **生态系统**：丰富的 npm 包
+- **现代特性**：支持最新的 JavaScript 特性
 
 ---
 
-## 使用示例
+## 示例输出
 
-```python
-python main.py
-```
-
-示例输出：
 ```
 === Financial AI Agent (Fin-Agent) Initializing... ===
 
@@ -229,7 +193,7 @@ python main.py
 ## 改进方向
 
 ### 短期
-- [ ] 添加单元测试
+- [ ] 添加更多单元测试
 - [ ] 完善错误处理
 - [ ] 添加日志系统
 
