@@ -23,12 +23,12 @@ import {
   SinglePeriodAttribution,
   LinkedAttribution,
   GeometricAttribution,
-  calculateActiveReturn,
-  calculateInformationRatio,
-  calculateTrackingError,
-  calculateBattingAverage,
-  chainLinkReturns,
-  geometricMeanReturn,
+  calculateActiveReturnUtil,
+  calculateInformationRatioUtil,
+  calculateTrackingErrorUtil,
+  calculateBattingAverageUtil,
+  chainLinkReturnsUtil,
+  geometricMeanReturnUtil,
 } from '../../types/attribution';
 
 /**
@@ -57,7 +57,7 @@ export class BrinsonAttributionCalculator {
     // 1. 计算组合和基准总收益
     const portfolioReturn = this.calculatePortfolioReturn(positions);
     const benchmarkReturn = benchmark.totalReturn;
-    const activeReturn = calculateActiveReturn(portfolioReturn, benchmarkReturn);
+    const activeReturn = calculateActiveReturnUtil(portfolioReturn, benchmarkReturn);
 
     // 2. 按板块聚合数据
     const sectorAttribution = this.calculateSectorAttribution(positions, benchmark);
@@ -69,16 +69,16 @@ export class BrinsonAttributionCalculator {
 
     // 4. 计算统计指标
     const activeReturns = this.extractActiveReturns(positions, benchmark);
-    const trackingError = calculateTrackingError(activeReturns);
-    const informationRatio = calculateInformationRatio(activeReturn, trackingError);
-    const battingAverage = calculateBattingAverage(activeReturns);
+    const trackingError = calculateTrackingErrorUtil(activeReturns);
+    const informationRatio = calculateInformationRatioUtil(activeReturn, trackingError);
+    const battingAverage = calculateBattingAverageUtil(activeReturns);
 
     // 5. 计算风险调整收益
     const riskFreeRate = 0.02; // TODO: 从配置或数据获取
-    const portfolioStdDev = ss.standardDeviation(positions.map(p => p.return));
-    const benchmarkStdDev = ss.standardDeviation(
+    const portfolioStdDev = positions.length > 0 ? ss.standardDeviation(positions.map(p => p.return)) : 0;
+    const benchmarkStdDev = benchmark.returns.size > 0 ? ss.standardDeviation(
       Array.from(benchmark.returns.values())
-    );
+    ) : 0;
     
     const sharpeRatio = portfolioStdDev !== 0 
       ? (portfolioReturn - riskFreeRate) / portfolioStdDev 
@@ -106,7 +106,7 @@ export class BrinsonAttributionCalculator {
         endDate: period.endDate,
         holdings: positions.map(p => ({
           ticker: p.ticker,
-          weight: p.portfolioWeight,
+          weight: p.portfolioWeight || p.weight,
           return: p.return,
           contribution: p.contribution,
           marketValue: p.marketValue,
@@ -166,9 +166,9 @@ export class BrinsonAttributionCalculator {
       spa => spa.brinsonAttribution.benchmarkReturn
     );
 
-    const cumulativePortfolioReturn = chainLinkReturns(portfolioReturns);
-    const cumulativeBenchmarkReturn = chainLinkReturns(benchmarkReturns);
-    const cumulativeActiveReturn = calculateActiveReturn(
+    const cumulativePortfolioReturn = chainLinkReturnsUtil(portfolioReturns);
+    const cumulativeBenchmarkReturn = chainLinkReturnsUtil(benchmarkReturns);
+    const cumulativeActiveReturn = calculateActiveReturnUtil(
       cumulativePortfolioReturn,
       cumulativeBenchmarkReturn
     );
@@ -201,6 +201,8 @@ export class BrinsonAttributionCalculator {
     return {
       periods: singlePeriodAttributions,
       cumulativeReturn: cumulativePortfolioReturn,
+      cumulativeBenchmarkReturn,
+      cumulativeActiveReturn,
       geometricAttribution,
       linkedAttribution,
       driftAnalysis,
@@ -238,7 +240,7 @@ export class BrinsonAttributionCalculator {
       }
 
       const sectorData = sectorMap.get(sector)!;
-      sectorData.portfolioWeight += pos.portfolioWeight;
+      sectorData.portfolioWeight += (pos.portfolioWeight || pos.weight);
       sectorData.portfolioReturn += pos.contribution;
     }
 
@@ -261,8 +263,9 @@ export class BrinsonAttributionCalculator {
     for (const sectorData of sectorMap.values()) {
       const wp = sectorData.portfolioWeight;
       const wb = sectorData.benchmarkWeight;
-      const Rp = sectorData.portfolioReturn;
-      const Rb = sectorData.benchmarkReturn;
+      // Convert contributions to return rates
+      const Rp = wp !== 0 ? sectorData.portfolioReturn / wp : 0;
+      const Rb = wb !== 0 ? sectorData.benchmarkReturn / wb : 0;
 
       // Brinson三效应
       sectorData.allocationEffect = (wp - wb) * Rb;
@@ -414,7 +417,7 @@ export class BrinsonAttributionCalculator {
     return positions.reduce((sum, pos) => {
       const benchmarkReturn = benchmark.returns.get(pos.ticker) || 0;
       // 简化的Beta估算：个股与基准的相关性
-      return sum + pos.portfolioWeight * (pos.return / (benchmarkReturn || 0.0001));
+      return sum + (pos.portfolioWeight || pos.weight) * (pos.return / (benchmarkReturn || 0.0001));
     }, 0);
   }
 
@@ -581,7 +584,7 @@ export class BrinsonAttributionCalculator {
 
     // 计算残差
     const activeReturns = periods.map(p => p.brinsonAttribution.activeReturn);
-    const cumulativeActiveReturn = chainLinkReturns(activeReturns);
+    const cumulativeActiveReturn = chainLinkReturnsUtil(activeReturns);
     const totalLinkedEffect = linkedAllocationEffect + linkedSelectionEffect + linkedInteractionEffect;
     const residual = cumulativeActiveReturn - totalLinkedEffect;
 
@@ -888,9 +891,9 @@ export class BrinsonAttributionCalculator {
     // 简化的几何调整
     const adjustmentFactor = cumulativePortfolioReturn / (cumulativePortfolioReturn + 1);
     
-    const geometricAllocationEffect = chainLinkReturns(allocationEffects) * adjustmentFactor;
-    const geometricSelectionEffect = chainLinkReturns(selectionEffects) * adjustmentFactor;
-    const geometricInteractionEffect = chainLinkReturns(interactionEffects) * adjustmentFactor;
+    const geometricAllocationEffect = chainLinkReturnsUtil(allocationEffects) * adjustmentFactor;
+    const geometricSelectionEffect = chainLinkReturnsUtil(selectionEffects) * adjustmentFactor;
+    const geometricInteractionEffect = chainLinkReturnsUtil(interactionEffects) * adjustmentFactor;
 
     return {
       geometricAllocationEffect,
@@ -906,5 +909,4 @@ export class BrinsonAttributionCalculator {
 // Export
 // ==========================================================================
 
-export { BrinsonAttributionCalculator };
 export default BrinsonAttributionCalculator;

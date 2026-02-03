@@ -3,6 +3,8 @@
  * 归因分析完整类型定义
  */
 
+import * as ss from 'simple-statistics';
+
 // ============================================================================
 // Core Data Models
 // ============================================================================
@@ -16,6 +18,9 @@ export interface PortfolioPosition {
   return: number;
   contribution: number;
   marketValue: number;
+  // 兼容旧版属性
+  portfolioWeight?: number;
+  sector?: string;
 }
 
 /**
@@ -71,6 +76,28 @@ export interface BrinsonAttribution {
   informationRatio: number;
   trackingError: number;
   battingAverage: number;
+  upsideCapture: number;
+  downsideCapture: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  treynorRatio: number;
+  jensenAlpha: number;
+  attributionQuality: AttributionQuality;
+  // 可选字段，用于多期归因
+  period?: {
+    startDate: string;
+    endDate: string;
+    holdings: Array<{
+      ticker: string;
+      weight: number;
+      return: number;
+      contribution: number;
+      marketValue: number;
+    }>;
+    portfolioReturn: number;
+    benchmarkReturn: number;
+  };
+  currencyAttribution?: unknown;
 }
 
 // ============================================================================
@@ -155,6 +182,275 @@ export interface RiskAttribution {
 }
 
 // ============================================================================
+// Brinson Configuration Types
+// ============================================================================
+
+/**
+ * Brinson归因计算配置
+ */
+export interface BrinsonCalculationConfig {
+  method: 'BHB' | 'BF' | 'MultiCurrency';
+  linkingMethod: 'Carino' | 'Menchero' | 'GRAP' | 'Carino-Menchero';
+  handleCash: boolean;
+  handleTax: boolean;
+  handleTransactionCosts: boolean;
+  includeCurrency: boolean;
+  currencyTranslationMethod: 'FCR' | 'FX' | 'Local';
+  roundingPrecision: number;
+  confidenceLevel: number;
+  significanceThreshold: number;
+}
+
+/**
+ * 默认Brinson计算配置
+ */
+export const DEFAULT_BRINSON_CONFIG: BrinsonCalculationConfig = {
+  method: 'BHB',
+  linkingMethod: 'Carino',
+  handleCash: true,
+  handleTax: false,
+  handleTransactionCosts: false,
+  includeCurrency: false,
+  currencyTranslationMethod: 'FCR',
+  roundingPrecision: 6,
+  confidenceLevel: 0.95,
+  significanceThreshold: 0.05,
+};
+
+// ============================================================================
+// Multi-Period Brinson Types
+// ============================================================================
+
+/**
+ * 多期Brinson归因结果
+ */
+export interface MultiPeriodBrinsonAttribution {
+  periods: SinglePeriodAttribution[];
+  cumulativeReturn: number;
+  cumulativeBenchmarkReturn: number;
+  cumulativeActiveReturn: number;
+  linkedAttribution: LinkedAttribution;
+  geometricAttribution: GeometricAttribution;
+  driftAnalysis: AttributionDriftAnalysis;
+  summaryStatistics: MultiPeriodSummaryStatistics;
+}
+
+/**
+ * 链式连接归因
+ */
+export interface LinkedAttribution {
+  method: 'Carino' | 'Menchero' | 'GRAP' | 'Carino-Menchero';
+  linkedAllocationEffect: number;
+  linkedSelectionEffect: number;
+  linkedInteractionEffect: number;
+  smoothingAdjustment: number;
+  residual: number;
+}
+
+/**
+ * 多期汇总统计
+ */
+export interface MultiPeriodSummaryStatistics {
+  totalPeriods: number;
+  positiveActiveReturnPeriods: number;
+  negativeActiveReturnPeriods: number;
+  averageActiveReturn: number;
+  medianActiveReturn: number;
+  stdDevActiveReturn: number;
+  maxActiveReturn: number;
+  minActiveReturn: number;
+  averageInformationRatio: number;
+  averageTrackingError: number;
+  hitRate: number;
+  bestPeriod: string;
+  worstPeriod: string;
+  consistencyScore: number;
+  cumulativePortfolioReturn: number;
+  cumulativeBenchmarkReturn: number;
+  cumulativeActiveReturn: number;
+}
+
+/**
+ * 归因质量指标
+ */
+export interface AttributionQuality {
+  completeness: number;
+  accuracy: number;
+  consistency: number;
+  explanatoryPower: number;
+  residuals: ResidualAnalysis;
+}
+
+/**
+ * 残差分析
+ */
+export interface ResidualAnalysis {
+  totalResidual: number;
+  unexplainedReturn: number;
+  residualStdDev: number;
+  maxResidual: number;
+  residualTests: ResidualTest[];
+}
+
+/**
+ * 残差检验
+ */
+export interface ResidualTest {
+  testName: string;
+  statistic: number;
+  pValue: number;
+  passed: boolean;
+}
+
+/**
+ * 归因期间
+ */
+export interface AttributionPeriod {
+  startDate: string;
+  endDate: string;
+  holdings: Holding[];
+  portfolioReturn: number;
+  benchmarkReturn: number;
+}
+
+/**
+ * 持仓数据
+ */
+export interface Holding {
+  ticker: string;
+  sector: string;
+  industry?: string;
+  country?: string;
+  currency?: string;
+  portfolioWeight: number;
+  benchmarkWeight: number;
+  portfolioReturn: number;
+  benchmarkReturn: number;
+  marketValue: number;
+}
+
+/**
+ * 货币归因
+ */
+export interface CurrencyAttribution {
+  baseCurrency: string;
+  currencyEffects: CurrencyEffect[];
+  totalCurrencyEffect: number;
+  localReturn: number;
+  baseReturn: number;
+}
+
+/**
+ * 货币效应
+ */
+export interface CurrencyEffect {
+  currency: string;
+  spotReturn: number;
+  forwardPremium: number;
+  currencyReturn: number;
+  contribution: number;
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * 计算主动收益
+ */
+export function calculateActiveReturnUtil(
+  portfolioReturn: number,
+  benchmarkReturn: number
+): number {
+  return portfolioReturn - benchmarkReturn;
+}
+
+/**
+ * 计算信息比率
+ */
+export function calculateInformationRatioUtil(
+  activeReturn: number,
+  trackingError: number
+): number {
+  return trackingError !== 0 ? activeReturn / trackingError : 0;
+}
+
+/**
+ * 计算跟踪误差
+ */
+export function calculateTrackingErrorUtil(activeReturns: number[]): number {
+  if (activeReturns.length === 0) return 0;
+  return ss.standardDeviation(activeReturns);
+}
+
+/**
+ * 计算胜率
+ */
+export function calculateBattingAverageUtil(activeReturns: number[]): number {
+  if (activeReturns.length === 0) return 0;
+  const wins = activeReturns.filter((r) => r > 0).length;
+  return wins / activeReturns.length;
+}
+
+/**
+ * 链式连接收益
+ */
+export function chainLinkReturnsUtil(returns: number[]): number {
+  if (returns.length === 0) return 0;
+  return returns.reduce((acc, r) => acc * (1 + r), 1) - 1;
+}
+
+/**
+ * 几何平均收益
+ */
+export function geometricMeanReturnUtil(returns: number[]): number {
+  if (returns.length === 0) return 0;
+  const product = returns.reduce((acc, r) => acc * (1 + r), 1);
+  return Math.pow(product, 1 / returns.length) - 1;
+}
+
+/**
+ * 验证Brinson归因完整性
+ */
+export function validateBrinsonAttribution(
+  attribution: BrinsonAttribution
+): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // 检查基础收益
+  if (attribution.period && Math.abs(attribution.portfolioReturn - attribution.period.portfolioReturn) > 1e-6) {
+    errors.push('Portfolio return mismatch');
+  }
+
+  if (attribution.period && Math.abs(attribution.benchmarkReturn - attribution.period.benchmarkReturn) > 1e-6) {
+    errors.push('Benchmark return mismatch');
+  }
+
+  // 检查Brinson三效应总和
+  const totalEffect = attribution.allocationEffect + 
+                      attribution.selectionEffect + 
+                      attribution.interactionEffect;
+  
+  if (Math.abs(totalEffect - attribution.activeReturn) > 1e-6) {
+    errors.push(`Brinson effects sum (${totalEffect}) != active return (${attribution.activeReturn})`);
+  }
+
+  // 检查板块归因
+  const sectorTotalEffect = attribution.sectorAttribution.reduce(
+    (sum, s) => sum + s.totalEffect, 0
+  );
+  
+  if (Math.abs(sectorTotalEffect - attribution.activeReturn) > 1e-6) {
+    errors.push(`Sector attribution sum (${sectorTotalEffect}) != active return (${attribution.activeReturn})`);
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+// ============================================================================
 // Factor Attribution
 // ============================================================================
 
@@ -215,11 +511,11 @@ export interface FactorAttribution {
  * 几何归因
  */
 export interface GeometricAttribution {
-  linkedAllocationEffect: number;
-  linkedSelectionEffect: number;
-  linkedInteractionEffect: number;
-  smoothingAdjustment: number;
-  geometricExplanation: string;
+  geometricAllocationEffect: number;
+  geometricSelectionEffect: number;
+  geometricInteractionEffect: number;
+  totalGeometricEffect: number;
+  explanation: string;
 }
 
 /**

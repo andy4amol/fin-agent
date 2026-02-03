@@ -31,12 +31,13 @@
 - **归因维度矩阵**：4维度×多子维度的完整分析体系
 
 ### ✅ 4. 归因引擎实现
-创建了 `src/l2_engine/attribution_engine.ts`（1200+行代码）：
+创建了 `src/l2_engine/attribution/` 模块：
 
 #### Brinson归因计算器
 ```typescript
 ✅ BrinsonAttributionCalculator
-   ├── calculateAttribution() 主方法
+   ├── calculateSinglePeriodAttribution() 单期主方法
+   ├── calculateMultiPeriodAttribution() 多期主方法
    ├── 组合收益 vs 基准收益计算
    ├── Brinson 三效应分解
    │   ├── Allocation Effect (配置效应)
@@ -97,7 +98,7 @@
 
 ### 代码统计
 - **文档行数**: 9000+ 行架构文档（3个文档）
-- **代码行数**: 1200+ 行 TypeScript 实现
+- **代码行数**: 2000+ 行 TypeScript 实现
 - **接口定义**: 20+ 个 TypeScript 接口
 - **功能模块**: 
   - ✅ Brinson归因计算器
@@ -170,7 +171,7 @@ R_i = α + Σβ_k × F_k + ε
 ## 实施路线图（摘要）
 
 ### Phase 1: 核心归因引擎 (Week 1-2)
-- ✅ 重构 PnLAnalyzer → AttributionEngine
+- ✅ 重构 PnLAnalyzer → Attribution 模块
 - ✅ 实现 Brinson 单期归因模型
 - ⏳ 实现多期归因（链式连接）
 - ⏳ 实现基础风险归因（Euler分配）
