@@ -480,6 +480,63 @@ User Request
 | **缓存策略** | 重复计算 | LRU/Memoization/Redis | 5-50x |
 | **增量计算** | 实时归因 | Delta computation | 2-10x |
 
+### 4.4 系统可靠性与异步处理 (System Reliability & Asynchronous Processing)
+
+针对金融计算的高负载特性，引入异步任务队列和熔断机制：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Asynchronous Job Processing                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  User Request → [L1 API Gateway] → [Job Queue (Redis)]      │
+│                                           │                 │
+│        ┌──────────────────────────────────┴────────┐        │
+│        ▼                                           ▼        │
+│  [Worker A: Fast Track]              [Worker B: Heavy Track]│
+│  - Single Period Attribution         - Monte Carlo VaR      │
+│  - Simple Risk Metrics               - Multi-Period Chain   │
+│  - Real-time Pricing                 - Factor Regression    │
+│                                                             │
+│        │                                           │        │
+│        └─────────────────┬─────────────────────────┘        │
+│                          ▼                                  │
+│                  [Result Cache (Redis)]                     │
+│                          │                                  │
+│  User Polling/WebSocket ←┘                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Circuit Breaker (熔断器)**：当外部数据源 (L5 Market MCP) 响应超时或错误率过高时，自动降级为上一次成功的缓存数据或模拟数据，防止级联故障。
+- **Rate Limiter (限流)**：针对 L4 LLM API 调用进行令牌桶限流，控制成本并防止配额耗尽。
+
+### 4.5 可观测性与审计 (Observability & Audit)
+
+为了满足金融合规要求，构建 L6 基础设施层：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              L6: Infrastructure & Observability             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Distributed Tracing (OpenTelemetry)                     │
+│     - Trace ID贯穿 L1->L5 全链路                            │
+│     - 记录每个环节的耗时（数据获取 vs 计算 vs 推理）        │
+│                                                             │
+│  2. Audit Logging (Immutable Ledger)                        │
+│     - 记录：Request ID, User ID, Timestamp                  │
+│     - 输入：Raw Query, Portfolio Snapshot                   │
+│     - 过程：Attribution Result (JSON), Retrieved News IDs   │
+│     - 输出：Final LLM Response                              │
+│                                                             │
+│  3. Data Snapshotting                                       │
+│     - 每次分析锁定 Input Data Snapshot                      │
+│     - 确保分析结果的可复现性 (Reproducibility)              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## 5. 实施路线图
@@ -498,6 +555,7 @@ User Request
 
 ### Phase 3: Data & Performance (Week 5-6)
 - [ ] 实现数据缓存层（Redis）
+- [ ] 构建异步任务队列（BullMQ/Redis）
 - [ ] 向量化计算优化
 - [ ] 并行计算优化
 - [ ] 基准测试与调优
@@ -505,6 +563,7 @@ User Request
 ### Phase 4: Integration & UI (Week 7-8)
 - [ ] 集成L3 RAG增强
 - [ ] 优化LLM Prompt工程
+- [ ] 实现全链路日志与审计（OpenTelemetry）
 - [ ] 实现报告生成功能
 - [ ] 可视化图表集成
 
@@ -548,11 +607,13 @@ User Request
 4. 实现多期归因和链式连接
 5. 实现因子归因（BARRA/自定义）
 6. 添加投资组合优化器
+7. 构建异步任务队列（应对计算密集型任务）
 
 **中期执行（P2）**：
-7. 实现回测引擎
-8. 添加机器学习因子
-9. 构建实时数据流
+8. 实现回测引擎
+9. 添加机器学习因子
+10. 构建实时数据流
+11. 建立全链路可观测性与审计系统
 
 ### 7.3 成功指标
 
@@ -566,7 +627,7 @@ User Request
 
 ---
 
-**文档版本**: v1.0  
-**作者**: Claude  
-**日期**: 2025-02-03  
-**状态**: 诊断报告 - 待实施
+**文档版本**: v1.1
+**作者**: Claude & Gemini
+**日期**: 2025-02-03
+**状态**: 架构设计 - 已增强 (异步处理 & 可观测性)

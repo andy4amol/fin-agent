@@ -15,4 +15,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   verbose: true,
+  moduleNameMapper: {
+    '^yahoo-finance2$': '<rootDir>/src/__mocks__/yahoo-finance2.ts',
+  },
 };

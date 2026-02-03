@@ -1,48 +1,32 @@
 import { SearchResult, NewsSource } from '../types';
+import { RAGService } from './rag_service';
 
 /**
- * L3 RAG - Search Engine
- * 搜索引擎，检索相关信息
+ * L3 RAG - Search Engine (Adapter)
+ * 适配器：将旧版 SearchEngine 接口适配到新的 RAGService
  */
 export class SearchEngine {
-  constructor(private newsSource: NewsSource) {}
+  private ragService: RAGService;
+
+  // 保持构造函数签名兼容，虽然 newsSource 可能不再主要使用
+  constructor(private newsSource: NewsSource) {
+    this.ragService = new RAGService();
+  }
 
   /**
    * 根据 query 检索相关信息
    * @param query 搜索查询
    * @returns 搜索结果列表
    */
-  search(query: string): SearchResult[] {
-    // 简单解析 query 提取 ticker
-    let ticker: string | null = null;
-    if (query.includes('0700')) {
-      ticker = '0700.HK';
-    } else if (query.includes('阿里')) {
-      ticker = 'BABA';
-    } else if (query.includes('苹果')) {
-      ticker = 'AAPL';
-    }
+  async search(query: string): Promise<SearchResult[]> {
+    // 调用新版 RAG Service
+    const items = await this.ragService.search(query);
 
-    const results: SearchResult[] = [];
-    if (ticker) {
-      const news = this.newsSource.getCompanyNews(ticker);
-      for (const n of news) {
-        results.push({
-          content: n,
-          source: 'News',
-          relevance: 0.9,
-        });
-      }
-    }
-
-    // 添加通用市场信息
-    const sentiment = this.newsSource.getMarketSentiment();
-    results.push({
-      content: `当前市场情绪: ${sentiment}`,
-      source: 'MarketSentiment',
-      relevance: 0.5,
-    });
-
-    return results;
+    // 适配返回类型 SearchResultItem -> SearchResult
+    return items.map(item => ({
+      content: `[${item.source}] ${item.title}: ${item.content}`,
+      source: item.type, // Map SourceType enum to string
+      relevance: item.reliabilityScore
+    }));
   }
 }

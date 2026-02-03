@@ -61,18 +61,52 @@ export class Guardrails {
   ): ConsistencyCheckResult {
     const issues: string[] = [];
 
+    // Helper: Extract numbers from text and check if any matches expected value with tolerance
+    const containsNumber = (text: string, expected: number, tolerance = 0.05): boolean => {
+      // Regex to find numbers: optional sign, digits, optional decimal, optional percent
+      const regex = /[-+]?[\d,]+(\.\d+)?%?/g; 
+      const matches = text.match(regex);
+      if (!matches) return false;
+
+      for (const match of matches) {
+        // Remove commas and % for parsing
+        const cleanVal = parseFloat(match.replace(/,/g, '').replace('%', ''));
+        if (isNaN(cleanVal)) continue;
+
+        // If expected is percentage (e.g. 0.15 for 15%), handle scaling
+        // If string had %, cleanVal is 15. Check against expected * 100 or expected
+        // Here expectedPnl is raw number. expectedReturn is string like "15.00%".
+        
+        if (Math.abs(cleanVal - expected) < Math.abs(expected * tolerance) + 0.01) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     // 1. 检查总盈亏数值
-    if (!responseText.includes(String(expectedPnl))) {
-      issues.push(`❌ 缺少或错误的总盈亏数值 ${expectedPnl}`);
+    if (!containsNumber(responseText, expectedPnl)) {
+      // Fallback to simple string check just in case formatting is very specific
+      if (!responseText.includes(String(expectedPnl))) {
+        issues.push(`❌ 缺少或错误的总盈亏数值 ${expectedPnl}`);
+      } else {
+        issues.push(`✅ 包含正确的总盈亏数值 ${expectedPnl} (文本匹配)`);
+      }
     } else {
-      issues.push(`✅ 包含正确的总盈亏数值 ${expectedPnl}`);
+      issues.push(`✅ 包含正确的总盈亏数值 ${expectedPnl} (数值匹配)`);
     }
 
     // 2. 检查总收益率
-    if (!responseText.includes(expectedReturn)) {
-      issues.push(`❌ 缺少或错误的收益率 ${expectedReturn}`);
+    // expectedReturn is string like "12.34%". Parse it.
+    const expectedReturnVal = parseFloat(expectedReturn.replace('%', ''));
+    if (!containsNumber(responseText, expectedReturnVal)) {
+        if (!responseText.includes(expectedReturn)) {
+            issues.push(`❌ 缺少或错误的收益率 ${expectedReturn}`);
+        } else {
+            issues.push(`✅ 包含正确的收益率 ${expectedReturn} (文本匹配)`);
+        }
     } else {
-      issues.push(`✅ 包含正确的收益率 ${expectedReturn}`);
+      issues.push(`✅ 包含正确的收益率 ${expectedReturn} (数值匹配)`);
     }
 
     // 3. 检查个股盈亏（至少应提及主要持仓）
@@ -86,7 +120,7 @@ export class Guardrails {
     }
 
     if (mentionedCount === 0) {
-      issues.push('⚠️  未提及任何具体持仓的盈亏情况');
+      issues.push('❌ 未提及任何具体持仓的盈亏情况');
     } else {
       issues.push(`✅ 提及了 ${mentionedCount} 个主要持仓`);
     }

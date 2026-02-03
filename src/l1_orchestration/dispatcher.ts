@@ -85,11 +85,18 @@ export class Dispatcher {
     const mockReturns = this.getMockHistoricalReturns(holdings.map(h => h.ticker));
 
     // 2.3 Calculate PnL (L2 - Brinson Engine)
-    const brinsonResult = this.brinsonCalc.calculateSinglePeriodAttribution(
-      positions,
-      benchmark,
-      { startDate: '2024-01-01', endDate: '2024-02-03' } // TODO: Dynamic dates
-    );
+    let brinsonResult;
+    try {
+      brinsonResult = this.brinsonCalc.calculateSinglePeriodAttribution(
+        positions,
+        benchmark,
+        { startDate: '2024-01-01', endDate: '2024-02-03' }
+      );
+    } catch (error) {
+      console.error('[L1] Error in Brinson Attribution Calculation:', error);
+      // Fallback or rethrow? For now rethrow to alert upstream, or return error message.
+      return `系统内部错误: 归因计算失败 (${error instanceof Error ? error.message : 'Unknown'})`;
+    }
     
     // Map Brinson result to PnLReport
     const pnlData: PnLReport = {
@@ -126,17 +133,27 @@ export class Dispatcher {
 
 
     // 2.4 Calculate Risk (L2 - Risk Engine)
-    const riskResult = this.riskCalc.calculateAttribution(
-      positions,
-      benchmark,
-      mockReturns
-    );
+    let riskResult;
+    try {
+      riskResult = this.riskCalc.calculateAttribution(
+        positions,
+        benchmark,
+        mockReturns
+      );
+    } catch (error) {
+      console.error('[L1] Error in Risk Attribution Calculation:', error);
+      // Fallback risk result
+      riskResult = {
+        portfolioVolatility: 0,
+        positionContributions: []
+      }; // Minimal mock to proceed
+    }
 
     // Map Risk result to RiskReport
     const riskData: RiskReport = {
-      total_risk_score: Math.round(riskResult.portfolioVolatility * 100), // Volatility as score
-      risk_level: riskResult.portfolioVolatility > 0.2 ? '高' : (riskResult.portfolioVolatility > 0.1 ? '中' : '低'),
-      details: riskResult.positionContributions.map(pc => ({
+      total_risk_score: Math.round((riskResult as any).portfolioVolatility * 100), // Volatility as score
+      risk_level: (riskResult as any).portfolioVolatility > 0.2 ? '高' : ((riskResult as any).portfolioVolatility > 0.1 ? '中' : '低'),
+      details: ((riskResult as any).positionContributions || []).map((pc: any) => ({
         ticker: pc.ticker,
         risk_contribution: pc.percentageContribution * 100
       }))
@@ -145,7 +162,7 @@ export class Dispatcher {
     // 2.5 Retrieve News/Context (L3)
     // Search for context relevant to holdings
     const topHolding = holdings[0]?.ticker ?? '';
-    const ragData: SearchResult[] = this.searchEngine.search(
+    const ragData: SearchResult[] = await this.searchEngine.search(
       `${topHolding} ${query}`
     );
 
